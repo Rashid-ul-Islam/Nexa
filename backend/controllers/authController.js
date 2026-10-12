@@ -1,5 +1,26 @@
 import jwt from "jsonwebtoken";
+import path from "path";
+import multer from "multer";
 import User from "../models/User.js";
+import { formatErrorResponse } from "../utils/errorHandler.js";
+import { supabase, BUCKET_NAME } from "../config/supabase.js";
+
+// Multer memory storage for direct cloud upload to Supabase
+const storage = multer.memoryStorage();
+const fileFilter = (_req, file, cb) => {
+  const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  if (allowed.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only JPEG, PNG, WEBP and GIF images are allowed"), false);
+  }
+};
+
+export const uploadAvatar = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max
+});
 
 /**
  * Signs a JWT session token for the user.
@@ -56,10 +77,8 @@ export const register = async (req, res) => {
     });
   } catch (error) {
     console.error("Register error:", error);
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Registration failed. Please try again." },
-    });
+    const { status: statusCode, body } = formatErrorResponse(error, "Registration failed. Please try again.");
+    return res.status(statusCode).json(body);
   }
 };
 
@@ -138,6 +157,7 @@ export const updateProfile = async (req, res) => {
       "interestFieldIds",
       "preferredCategoryIds",
       "preferredLocations",
+      "profilePicture",
     ];
 
     const updates = {};
@@ -193,9 +213,132 @@ export const updateProfile = async (req, res) => {
     });
   } catch (error) {
     console.error("Update profile error:", error);
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Failed to update profile." },
+    const { status: statusCode, body } = formatErrorResponse(error, "Failed to update profile.");
+    return res.status(statusCode).json(body);
+  }
+};
+
+/**
+ * POST /api/auth/profile/picture
+ * Uploads a profile picture to Supabase storage and saves the public URL to MongoDB.
+ */
+export const uploadProfilePicture = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: { code: "VALIDATION_ERROR", message: "Please select an image file to upload." },
+      });
+    }
+
+    const file = req.file;
+    const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
+    const uniqueName = `user-${req.user._id}-${Date.now()}${ext}`;
+    const filePath = `avatars/${uniqueName}`;
+
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(filePath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("Supabase storage upload error:", uploadError);
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: "STORAGE_UPLOAD_ERROR",
+          message: `Failed to upload profile picture to Supabase: ${uploadError.message}`,
+        },
+      });
+    }
+
+    // Retrieve public URL from Supabase
+    const { data: publicUrlData } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(filePath);
+
+    const publicUrl = publicUrlData?.publicUrl;
+    if (!publicUrl) {
+      return res.status(500).json({
+        success: false,
+        error: { code: "STORAGE_ERROR", message: "Failed to generate public URL for uploaded photo." },
+      });
+    }
+
+    // Cleanup previous profile picture from storage if it belonged to this bucket
+    const oldPicture = req.user.profile?.profilePicture;
+    if (oldPicture && oldPicture.includes(BUCKET_NAME)) {
+      try {
+        const oldPath = oldPicture.split(`${BUCKET_NAME}/`)[1];
+        if (oldPath) {
+          await supabase.storage.from(BUCKET_NAME).remove([oldPath]);
+        }
+      } catch (delErr) {
+        console.warn("Could not delete previous profile picture:", delErr.message);
+      }
+    }
+
+    // Save image link in MongoDB
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: { "profile.profilePicture": publicUrl } },
+      { new: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile picture updated successfully!",
+      profilePicture: publicUrl,
+      user: updatedUser.toSafeObject(),
     });
+  } catch (error) {
+    console.error("Profile picture upload error:", error);
+    const { status: statusCode, body } = formatErrorResponse(
+      error,
+      "Failed to upload profile picture."
+    );
+    return res.status(statusCode).json(body);
+  }
+};
+
+/**
+ * DELETE /api/auth/profile/picture
+ * Removes profile picture from Supabase storage and clears the link in MongoDB.
+ */
+export const removeProfilePicture = async (req, res) => {
+  try {
+    const oldPicture = req.user.profile?.profilePicture;
+    if (oldPicture && oldPicture.includes(BUCKET_NAME)) {
+      try {
+        const oldPath = oldPicture.split(`${BUCKET_NAME}/`)[1];
+        if (oldPath) {
+          await supabase.storage.from(BUCKET_NAME).remove([oldPath]);
+        }
+      } catch (delErr) {
+        console.warn("Could not delete previous profile picture from Supabase:", delErr.message);
+      }
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: { "profile.profilePicture": null } },
+      { new: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile picture removed successfully!",
+      user: updatedUser.toSafeObject(),
+    });
+  } catch (error) {
+    console.error("Profile picture remove error:", error);
+    const { status: statusCode, body } = formatErrorResponse(
+      error,
+      "Failed to remove profile picture."
+    );
+    return res.status(statusCode).json(body);
   }
 };

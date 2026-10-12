@@ -2,7 +2,9 @@ import Opportunity, { computeDerivedFields } from "../models/Opportunity.js";
 import Category from "../models/Category.js";
 import Field from "../models/Field.js";
 import Skill from "../models/Skill.js";
-import { calculateMatch, calculateDistanceKm } from "../utils/matchingService.js";
+import { calculateMatch, createMatcher } from "../utils/matchingService.js";
+import { calculateDistanceKm } from "../utils/geoDistance.js";
+import { formatErrorResponse } from "../utils/errorHandler.js";
 
 /**
  * GET /api/opportunities
@@ -130,6 +132,7 @@ export const getOpportunities = async (req, res) => {
     const totalPages = Math.ceil(total / limitNum);
 
     // Attach distanceKm and personalized match scores
+    const matcher = req.user?.profile ? createMatcher(req.user.profile) : null;
     let enriched = opportunities.map((opp) => {
       let itemDistanceKm = null;
       if (
@@ -147,8 +150,8 @@ export const getOpportunities = async (req, res) => {
       }
 
       let matchData = null;
-      if (req.user?.profile) {
-        const matchResult = calculateMatch(req.user.profile, opp);
+      if (matcher) {
+        const matchResult = matcher(opp);
         matchData = {
           score: matchResult.score,
           label: matchResult.label,
@@ -270,10 +273,8 @@ export const getOpportunityById = async (req, res) => {
     });
   } catch (error) {
     console.error("Get opportunity by id error:", error);
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Failed to fetch opportunity details." },
-    });
+    const { status: statusCode, body } = formatErrorResponse(error, "Failed to fetch opportunity details.");
+    return res.status(statusCode).json(body);
   }
 };
 
@@ -404,19 +405,8 @@ export const createOpportunity = async (req, res) => {
     });
   } catch (error) {
     console.error("Create opportunity error:", error);
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        error: {
-          code: "DUPLICATE_ERROR",
-          message: "An opportunity with this application URL already exists.",
-        },
-      });
-    }
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Failed to create opportunity." },
-    });
+    const { status: statusCode, body } = formatErrorResponse(error, "Failed to create opportunity.");
+    return res.status(statusCode).json(body);
   }
 };
 
@@ -502,10 +492,8 @@ export const updateOpportunity = async (req, res) => {
     });
   } catch (error) {
     console.error("Update opportunity error:", error);
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Failed to update opportunity." },
-    });
+    const { status: statusCode, body } = formatErrorResponse(error, "Failed to update opportunity.");
+    return res.status(statusCode).json(body);
   }
 };
 
@@ -531,10 +519,8 @@ export const deleteOpportunity = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete opportunity error:", error);
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Failed to delete opportunity." },
-    });
+    const { status: statusCode, body } = formatErrorResponse(error, "Failed to delete opportunity.");
+    return res.status(statusCode).json(body);
   }
 };
 
@@ -583,9 +569,7 @@ export const getAdminOpportunitiesQueue = async (req, res) => {
     });
   } catch (error) {
     console.error("Admin queue error:", error);
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Failed to fetch admin listings queue." },
-    });
+    const { status: statusCode, body } = formatErrorResponse(error, "Failed to fetch admin listings queue.");
+    return res.status(statusCode).json(body);
   }
 };

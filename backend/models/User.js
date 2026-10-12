@@ -92,6 +92,11 @@ const profileSchema = new mongoose.Schema(
         city: { type: String, maxlength: 100, default: null },
       },
     ],
+    profilePicture: {
+      type: String,
+      default: null,
+      trim: true,
+    },
   },
   { _id: false }
 );

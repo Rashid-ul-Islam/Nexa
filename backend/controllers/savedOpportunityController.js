@@ -1,6 +1,7 @@
 import SavedOpportunity from "../models/SavedOpportunity.js";
 import Opportunity from "../models/Opportunity.js";
 import { calculateMatch } from "../utils/matchingService.js";
+import { formatErrorResponse } from "../utils/errorHandler.js";
 
 /**
  * POST /api/saved-opportunities
@@ -37,10 +38,8 @@ export const saveOpportunity = async (req, res) => {
     });
   } catch (error) {
     console.error("Save opportunity error:", error);
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Failed to save opportunity." },
-    });
+    const { status: statusCode, body } = formatErrorResponse(error, "Failed to save opportunity.");
+    return res.status(statusCode).json(body);
   }
 };
 
@@ -63,10 +62,8 @@ export const unsaveOpportunity = async (req, res) => {
     });
   } catch (error) {
     console.error("Unsave opportunity error:", error);
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Failed to unsave opportunity." },
-    });
+    const { status: statusCode, body } = formatErrorResponse(error, "Failed to unsave opportunity.");
+    return res.status(statusCode).json(body);
   }
 };
 

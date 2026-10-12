@@ -1,15 +1,28 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext.jsx";
 import api from "../services/api.js";
-import { User, Save, BookOpen, MapPin, Award, Compass } from "lucide-react";
+import {
+  User,
+  Save,
+  BookOpen,
+  MapPin,
+  Award,
+  Compass,
+  Camera,
+  Trash2,
+  Loader2,
+  UploadCloud,
+} from "lucide-react";
 import LocationPickerMap from "../components/LocationPickerMap.jsx";
 
 export default function Profile() {
-  const { user, token, isLoggedIn, login } = useAuth();
+  const { user, token, isLoggedIn, isHydrating, login } = useAuth();
   const navigate = useNavigate();
 
+  const fileInputRef = useRef(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fieldsList, setFieldsList] = useState([]);
   const [skillsList, setSkillsList] = useState([]);
@@ -28,12 +41,12 @@ export default function Profile() {
   const [remotePreference, setRemotePreference] = useState("ANY");
   const [selectedSkills, setSelectedSkills] = useState([]);
 
-  // If not logged in, redirect to login
+  // If not logged in, redirect to login only after auth state finishes hydrating
   useEffect(() => {
-    if (!isLoggedIn) {
+    if (!isHydrating && !isLoggedIn) {
       navigate("/login");
     }
-  }, [isLoggedIn, navigate]);
+  }, [isHydrating, isLoggedIn, navigate]);
 
   // Load fields & skills taxonomies
   useEffect(() => {
@@ -73,6 +86,63 @@ export default function Profile() {
         ? prev.filter((id) => id !== skillId)
         : [...prev, skillId]
     );
+  };
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Please upload a valid image file (JPEG, PNG, WebP or GIF).");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File size exceeds 5MB limit. Please choose a smaller image.");
+      return;
+    }
+
+    setAvatarUploading(true);
+    const formData = new FormData();
+    formData.append("picture", file);
+
+    try {
+      const res = await api.post("/auth/profile/picture", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      login(res.data.user, token);
+      toast.success("Profile picture updated successfully!");
+    } catch (err) {
+      const message =
+        err.response?.data?.error?.message ||
+        "Failed to upload profile picture. Ensure Supabase credentials are configured.";
+      toast.error(message);
+    } finally {
+      setAvatarUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    if (!window.confirm("Are you sure you want to remove your profile picture?")) {
+      return;
+    }
+
+    setAvatarUploading(true);
+    try {
+      const res = await api.delete("/auth/profile/picture");
+      login(res.data.user, token);
+      toast.success("Profile picture removed successfully!");
+    } catch (err) {
+      const message =
+        err.response?.data?.error?.message || "Failed to remove profile picture.";
+      toast.error(message);
+    } finally {
+      setAvatarUploading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -118,6 +188,14 @@ export default function Profile() {
     }
   };
 
+  if (isHydrating) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-20 text-center text-gray-400 animate-pulse">
+        Loading profile...
+      </div>
+    );
+  }
+
   if (!user) return null;
 
   return (
@@ -132,6 +210,94 @@ export default function Profile() {
             <p className="text-sm text-gray-500">
               Customize your profile to unlock accurate, explainable opportunity matching
             </p>
+          </div>
+        </div>
+
+        {/* Profile Picture Section */}
+        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 p-5 bg-slate-50 border border-slate-200/80 rounded-2xl mb-8">
+          {/* Avatar Preview with Camera Overlay */}
+          <div className="relative group shrink-0">
+            <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-white shadow-md bg-white flex items-center justify-center">
+              {user?.profile?.profilePicture ? (
+                <img
+                  src={user.profile.profilePicture}
+                  alt={user.displayName || "Profile photo"}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-[#0F8B8D]/10 text-[#0F8B8D] flex items-center justify-center text-3xl font-bold">
+                  {displayName ? (
+                    displayName.charAt(0).toUpperCase()
+                  ) : (
+                    <User className="w-10 h-10" />
+                  )}
+                </div>
+              )}
+            </div>
+
+            {avatarUploading && (
+              <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center text-white">
+                <Loader2 className="w-6 h-6 animate-spin" />
+              </div>
+            )}
+
+            {/* Quick Upload Button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={avatarUploading}
+              title="Change profile picture"
+              className="absolute bottom-0 right-0 p-2 bg-[#0B1F3A] hover:bg-[#0F8B8D] text-white rounded-full shadow-md transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <Camera className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Picture Actions and Guidance */}
+          <div className="flex-1 text-center sm:text-left">
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
+              <h3 className="text-base font-bold text-[#0B1F3A]">Profile Photo</h3>
+              {user?.profile?.profilePicture && (
+                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Cloud Synced
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 mt-1 mb-3">
+              Upload a clear student portrait. Photos are securely stored in Supabase Storage and linked to your MongoDB account. (Max 5MB)
+            </p>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleAvatarChange}
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+            />
+
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={avatarUploading}
+                className="px-3.5 py-1.5 bg-white border border-slate-300 hover:border-[#0F8B8D] text-slate-700 hover:text-[#0F8B8D] text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                {avatarUploading ? "Uploading..." : "Upload New Photo"}
+              </button>
+
+              {user?.profile?.profilePicture && (
+                <button
+                  type="button"
+                  onClick={handleAvatarRemove}
+                  disabled={avatarUploading}
+                  className="px-3.5 py-1.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Remove Photo
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

@@ -14,6 +14,7 @@ import savedOpportunityRoutes from "./routes/savedOpportunityRoutes.js";
 import applicationRoutes from "./routes/applicationRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
+import { formatErrorResponse } from "./utils/errorHandler.js";
 
 // Ensure reliable DNS resolution for MongoDB Atlas SRV connection strings
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
@@ -83,13 +84,8 @@ app.use((_req, res) => {
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
   console.error("API Error:", err);
-  res.status(err.status || 500).json({
-    success: false,
-    error: {
-      code: err.code || "INTERNAL_ERROR",
-      message: process.env.NODE_ENV === "production" ? "Internal server error" : err.message,
-    },
-  });
+  const { status, body } = formatErrorResponse(err);
+  res.status(status).json(body);
 });
 
 // Start server

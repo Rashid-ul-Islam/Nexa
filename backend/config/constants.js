@@ -125,24 +125,31 @@ export const EXPERIENCE_RANK = Object.freeze({
   ADVANCED: 3,
 });
 
+export const URGENCY_BONUS_TABLE = Object.freeze([
+  { maxHoursLeft: 24, bonus: 15 },
+  { maxHoursLeft: 72, bonus: 12 },
+  { maxHoursLeft: 168, bonus: 8 },
+  { maxHoursLeft: 336, bonus: 4 },
+]);
+
 export const EDUCATION_LABELS = Object.freeze({
-  HIGH_SCHOOL: "High School",
+  HIGH_SCHOOL: "High school",
   UNDERGRADUATE: "Undergraduate",
-  RECENT_GRADUATE: "Recent Graduate",
-  MASTERS: "Master's Degree",
-  PHD: "PhD / Doctorate",
+  RECENT_GRADUATE: "Recent graduate",
+  MASTERS: "Master's",
+  PHD: "PhD",
 });
 
 export const EXPERIENCE_LABELS = Object.freeze({
-  NONE: "No Prior Experience",
-  ENTRY: "Entry Level",
-  INTERMEDIATE: "Intermediate Level",
-  ADVANCED: "Advanced Level",
+  NONE: "No experience needed",
+  ENTRY: "Some experience (under 1 year)",
+  INTERMEDIATE: "1-3 years of experience",
+  ADVANCED: "3+ years of experience",
 });
 
 export const REMOTE_LABELS = Object.freeze({
-  REMOTE: "Remote",
-  HYBRID: "Hybrid",
-  ONSITE: "On-site",
-  ANY: "Any Work Mode",
+  REMOTE: "remote",
+  HYBRID: "hybrid",
+  ONSITE: "on-site",
+  ANY: "flexible",
 });

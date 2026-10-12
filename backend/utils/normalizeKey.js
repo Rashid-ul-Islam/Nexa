@@ -12,6 +12,7 @@ export function normalizeKey(s) {
     .trim();
 }
 
+
 /**
  * Normalizes skill names (collapses whitespace, lowercases).
  */

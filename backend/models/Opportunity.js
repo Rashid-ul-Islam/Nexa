@@ -22,15 +22,15 @@ const opportunitySchema = new mongoose.Schema(
       type: String,
       required: [true, "Title is required"],
       trim: true,
-      minlength: 3,
-      maxlength: 300,
+      minlength: [3, "Title must be at least 3 characters long"],
+      maxlength: [300, "Title cannot exceed 300 characters"],
     },
     organizationName: {
       type: String,
       required: [true, "Organization name is required"],
       trim: true,
-      minlength: 2,
-      maxlength: 200,
+      minlength: [2, "Organization name must be at least 2 characters long"],
+      maxlength: [200, "Organization name cannot exceed 200 characters"],
     },
     organizationLogoUrl: {
       type: String,
@@ -45,8 +45,8 @@ const opportunitySchema = new mongoose.Schema(
     description: {
       type: String,
       required: [true, "Description is required"],
-      minlength: 20,
-      maxlength: 10000,
+      minlength: [20, "Description must be at least 20 characters long"],
+      maxlength: [10000, "Description cannot exceed 10,000 characters"],
     },
     applicationUrl: {
       type: String,

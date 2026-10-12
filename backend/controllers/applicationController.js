@@ -1,6 +1,7 @@
 import Application from "../models/Application.js";
 import Opportunity from "../models/Opportunity.js";
 import { APPLICATION_STATUSES } from "../config/constants.js";
+import { formatErrorResponse } from "../utils/errorHandler.js";
 
 /**
  * POST /api/applications
@@ -74,10 +75,8 @@ export const createOrUpdateApplication = async (req, res) => {
     });
   } catch (error) {
     console.error("Create/update application error:", error);
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Failed to record application." },
-    });
+    const { status: statusCode, body } = formatErrorResponse(error, "Failed to record application.");
+    return res.status(statusCode).json(body);
   }
 };
 
@@ -181,10 +180,8 @@ export const updateApplication = async (req, res) => {
     });
   } catch (error) {
     console.error("Update application error:", error);
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Failed to update application." },
-    });
+    const { status: statusCode, body } = formatErrorResponse(error, "Failed to update application.");
+    return res.status(statusCode).json(body);
   }
 };
 
@@ -214,9 +211,7 @@ export const deleteApplication = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete application error:", error);
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Failed to delete application." },
-    });
+    const { status: statusCode, body } = formatErrorResponse(error, "Failed to delete application.");
+    return res.status(statusCode).json(body);
   }
 };

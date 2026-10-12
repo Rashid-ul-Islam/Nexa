@@ -17,6 +17,8 @@ import {
   Building2,
   Send,
   MapPin,
+  Pencil,
+  X,
 } from "lucide-react";
 import LocationPickerMap from "../components/LocationPickerMap.jsx";
 
@@ -32,6 +34,11 @@ export default function AdminPage() {
   // Listings state
   const [listings, setListings] = useState([]);
   const [listingsLoading, setListingsLoading] = useState(false);
+
+  // Edit Opportunity Modal state
+  const [editingOpp, setEditingOpp] = useState(null);
+  const [editForm, setEditForm] = useState(null);
+  const [updating, setUpdating] = useState(false);
 
   // Categories for Publish form
   const [categories, setCategories] = useState([]);
@@ -192,9 +199,102 @@ export default function AdminPage() {
     }
   };
 
+  // Start editing an opportunity
+  const startEditOpportunity = (item) => {
+    setEditingOpp(item);
+    setEditForm({
+      title: item.title || "",
+      organizationName: item.organizationName || "",
+      categoryId: item.categoryId?._id || item.categoryId || "",
+      description: item.description || "",
+      applicationUrl: item.applicationUrl || "",
+      remoteType: item.remoteType || "REMOTE",
+      city: item.city || "",
+      country: item.country || "US",
+      address: item.address || "",
+      location:
+        Array.isArray(item.location?.coordinates) && item.location.coordinates.length === 2
+          ? { lat: item.location.coordinates[1], lng: item.location.coordinates[0] }
+          : null,
+      deadlineStatus: item.deadlineStatus || "FIXED",
+      deadline: item.deadline ? new Date(item.deadline).toISOString().split("T")[0] : "",
+      status: item.status || "PUBLISHED",
+      verificationStatus: item.verificationStatus || "UNVERIFIED",
+      fundingType: item.fundingType || "PAID",
+      stipendAmount:
+        item.stipendAmount !== null && item.stipendAmount !== undefined
+          ? String(item.stipendAmount)
+          : "",
+      currency: item.currency || "USD",
+    });
+  };
+
+  // Submit update for opportunity
+  const handleUpdateSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingOpp || !editForm) return;
+
+    if (!editForm.description || editForm.description.trim().length < 20) {
+      toast.error(
+        `Description must be at least 20 characters long (currently ${
+          editForm.description ? editForm.description.trim().length : 0
+        } characters).`
+      );
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const payload = {
+        title: editForm.title.trim(),
+        organizationName: editForm.organizationName.trim(),
+        categoryId: editForm.categoryId,
+        description: editForm.description.trim(),
+        applicationUrl: editForm.applicationUrl.trim(),
+        remoteType: editForm.remoteType,
+        country: editForm.country ? editForm.country.toUpperCase().trim() : null,
+        city: editForm.city ? editForm.city.trim() : null,
+        address: editForm.address ? editForm.address.trim() : null,
+        location: editForm.location,
+        deadlineStatus: editForm.deadlineStatus,
+        deadline: editForm.deadline || null,
+        status: editForm.status,
+        verificationStatus: editForm.verificationStatus,
+        fundingType: editForm.fundingType,
+        stipendAmount: editForm.stipendAmount ? Number(editForm.stipendAmount) : null,
+        currency: editForm.currency,
+      };
+
+      const res = await api.patch(`/opportunities/${editingOpp._id}`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      toast.success("Opportunity updated successfully.");
+      setListings((prev) =>
+        prev.map((item) => (item._id === editingOpp._id ? res.data.data : item))
+      );
+      setEditingOpp(null);
+      setEditForm(null);
+    } catch (err) {
+      toast.error(err.response?.data?.error?.message || "Failed to update opportunity.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   // Handle publish form submit
   const handlePublishSubmit = async (e) => {
     e.preventDefault();
+
+    if (!publishForm.description || publishForm.description.trim().length < 20) {
+      toast.error(
+        `Description must be at least 20 characters long (currently ${
+          publishForm.description ? publishForm.description.trim().length : 0
+        } characters).`
+      );
+      return;
+    }
+
     setPublishing(true);
     try {
       const payload = {
@@ -446,6 +546,16 @@ export default function AdminPage() {
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startEditOpportunity(item)}
+                              className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-2xs font-semibold cursor-pointer inline-flex items-center gap-1"
+                              title="Edit Opportunity"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span>Edit</span>
+                            </button>
+
                             {item.verificationStatus !== "VERIFIED" && (
                               <button
                                 type="button"
@@ -644,17 +754,35 @@ export default function AdminPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Detailed Description *
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-gray-700">
+                  Detailed Description *
+                </label>
+                <span
+                  className={`text-2xs font-semibold ${
+                    publishForm.description.trim().length >= 20 ? "text-emerald-600" : "text-amber-600"
+                  }`}
+                >
+                  {publishForm.description.trim().length} / 20 min characters
+                </span>
+              </div>
               <textarea
                 required
                 rows={5}
-                placeholder="Overview, eligibility, responsibilities, and benefits..."
+                placeholder="Overview, eligibility, responsibilities, and benefits (minimum 20 characters)..."
                 value={publishForm.description}
                 onChange={(e) => setPublishForm({ ...publishForm, description: e.target.value })}
-                className="w-full text-xs sm:text-sm p-3 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                className={`w-full text-xs sm:text-sm p-3 border rounded-xl outline-none focus:ring-2 ${
+                  publishForm.description.length > 0 && publishForm.description.trim().length < 20
+                    ? "border-amber-400 focus:ring-amber-400 bg-amber-50/20"
+                    : "border-gray-300 focus:ring-blue-500"
+                }`}
               />
+              {publishForm.description.length > 0 && publishForm.description.trim().length < 20 && (
+                <p className="text-2xs text-amber-600 mt-1 font-medium flex items-center gap-1">
+                  ⚠ Description must be at least 20 characters long ({20 - publishForm.description.trim().length} more needed).
+                </p>
+              )}
             </div>
 
             <div className="pt-4 flex items-center justify-end">
@@ -668,6 +796,279 @@ export default function AdminPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* EDIT OPPORTUNITY MODAL */}
+      {editingOpp && editForm && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-100 p-6 sm:p-8">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
+              <div>
+                <span className="text-2xs font-bold text-blue-600 uppercase tracking-wider">
+                  Admin Modification
+                </span>
+                <h3 className="text-xl font-bold text-gray-900">Edit Opportunity Listing</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingOpp(null);
+                  setEditForm(null);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-700 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateSubmit} className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.title}
+                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                    className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Organization</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.organizationName}
+                    onChange={(e) => setEditForm({ ...editForm, organizationName: e.target.value })}
+                    className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Category</label>
+                  <select
+                    value={editForm.categoryId}
+                    onChange={(e) => setEditForm({ ...editForm, categoryId: e.target.value })}
+                    className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    {categories.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Publication Status</label>
+                  <select
+                    value={editForm.status}
+                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                    className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium"
+                  >
+                    <option value="PUBLISHED">PUBLISHED</option>
+                    <option value="DRAFT">DRAFT</option>
+                    <option value="PENDING_REVIEW">PENDING_REVIEW</option>
+                    <option value="EXPIRED">EXPIRED</option>
+                    <option value="ARCHIVED">ARCHIVED</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Verification Status</label>
+                  <select
+                    value={editForm.verificationStatus}
+                    onChange={(e) => setEditForm({ ...editForm, verificationStatus: e.target.value })}
+                    className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white font-bold"
+                  >
+                    <option value="VERIFIED">VERIFIED</option>
+                    <option value="UNVERIFIED">UNVERIFIED</option>
+                    <option value="REVIEWED">REVIEWED</option>
+                    <option value="FLAGGED">FLAGGED</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Workplace Mode</label>
+                  <select
+                    value={editForm.remoteType}
+                    onChange={(e) => setEditForm({ ...editForm, remoteType: e.target.value })}
+                    className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="REMOTE">Remote</option>
+                    <option value="HYBRID">Hybrid</option>
+                    <option value="ONSITE">On-Site</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Country Code</label>
+                  <input
+                    type="text"
+                    maxLength={2}
+                    value={editForm.country}
+                    onChange={(e) => setEditForm({ ...editForm, country: e.target.value.toUpperCase() })}
+                    className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">City</label>
+                  <input
+                    type="text"
+                    value={editForm.city}
+                    onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                    className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Location Picker Map for Onsite & Hybrid */}
+              {editForm.remoteType !== "REMOTE" && (
+                <div className="pt-2">
+                  <LocationPickerMap
+                    coords={editForm.location}
+                    address={editForm.address}
+                    label="Pin Venue Location & Address"
+                    onChange={({ lat, lng, address: addr, city: c, countryCode }) => {
+                      setEditForm((prev) => ({
+                        ...prev,
+                        location: { lat, lng },
+                        address: addr || prev.address,
+                        city: c || prev.city,
+                        country: countryCode || prev.country,
+                      }));
+                    }}
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Deadline Type</label>
+                  <select
+                    value={editForm.deadlineStatus}
+                    onChange={(e) => setEditForm({ ...editForm, deadlineStatus: e.target.value })}
+                    className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="FIXED">Fixed Deadline Date</option>
+                    <option value="OPEN_UNTIL_FILLED">Open Until Filled (Rolling)</option>
+                    <option value="NO_DEADLINE">No Deadline</option>
+                  </select>
+                </div>
+                {editForm.deadlineStatus === "FIXED" && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Deadline Date</label>
+                    <input
+                      type="date"
+                      value={editForm.deadline}
+                      onChange={(e) => setEditForm({ ...editForm, deadline: e.target.value })}
+                      className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Funding</label>
+                  <select
+                    value={editForm.fundingType}
+                    onChange={(e) => setEditForm({ ...editForm, fundingType: e.target.value })}
+                    className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="PAID">Paid</option>
+                    <option value="FULLY_FUNDED">Fully Funded</option>
+                    <option value="PARTIALLY_FUNDED">Partially Funded</option>
+                    <option value="UNPAID">Unpaid</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Stipend Amount</label>
+                  <input
+                    type="number"
+                    value={editForm.stipendAmount}
+                    onChange={(e) => setEditForm({ ...editForm, stipendAmount: e.target.value })}
+                    className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Currency</label>
+                  <input
+                    type="text"
+                    maxLength={3}
+                    value={editForm.currency}
+                    onChange={(e) => setEditForm({ ...editForm, currency: e.target.value.toUpperCase() })}
+                    className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Official Application URL</label>
+                <input
+                  type="url"
+                  required
+                  value={editForm.applicationUrl}
+                  onChange={(e) => setEditForm({ ...editForm, applicationUrl: e.target.value })}
+                  className="w-full text-xs sm:text-sm px-3.5 py-2.5 border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-gray-700">
+                    Description *
+                  </label>
+                  <span
+                    className={`text-2xs font-semibold ${
+                      editForm.description.trim().length >= 20 ? "text-emerald-600" : "text-amber-600"
+                    }`}
+                  >
+                    {editForm.description.trim().length} / 20 min characters
+                  </span>
+                </div>
+                <textarea
+                  rows={4}
+                  required
+                  placeholder="Overview, eligibility, and details (minimum 20 characters)..."
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  className={`w-full text-xs sm:text-sm p-3 border rounded-xl outline-none focus:ring-2 ${
+                    editForm.description.length > 0 && editForm.description.trim().length < 20
+                      ? "border-amber-400 focus:ring-amber-400 bg-amber-50/20"
+                      : "border-gray-300 focus:ring-blue-500"
+                  }`}
+                />
+                {editForm.description.length > 0 && editForm.description.trim().length < 20 && (
+                  <p className="text-2xs text-amber-600 mt-1 font-medium flex items-center gap-1">
+                    ⚠ Description must be at least 20 characters long ({20 - editForm.description.trim().length} more needed).
+                  </p>
+                )}
+              </div>
+
+              <div className="pt-4 flex items-center justify-end gap-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingOpp(null);
+                    setEditForm(null);
+                  }}
+                  className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs transition-all text-xs cursor-pointer"
+                >
+                  {updating ? "Saving Changes..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

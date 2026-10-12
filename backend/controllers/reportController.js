@@ -1,6 +1,7 @@
 import Report from "../models/Report.js";
 import Opportunity from "../models/Opportunity.js";
 import { REPORT_REASONS, REPORT_STATUSES } from "../config/constants.js";
+import { formatErrorResponse } from "../utils/errorHandler.js";
 
 /**
  * POST /api/reports
@@ -79,10 +80,8 @@ export const createReport = async (req, res) => {
     });
   } catch (error) {
     console.error("Create report error:", error);
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Failed to submit report." },
-    });
+    const { status: statusCode, body } = formatErrorResponse(error, "Failed to submit report.");
+    return res.status(statusCode).json(body);
   }
 };
 
@@ -181,9 +180,7 @@ export const resolveReport = async (req, res) => {
     });
   } catch (error) {
     console.error("Resolve report error:", error);
-    return res.status(500).json({
-      success: false,
-      error: { code: "INTERNAL_ERROR", message: "Failed to resolve report." },
-    });
+    const { status: statusCode, body } = formatErrorResponse(error, "Failed to resolve report.");
+    return res.status(statusCode).json(body);
   }
 };
