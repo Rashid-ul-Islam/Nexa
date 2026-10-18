@@ -304,7 +304,7 @@ export const createOpportunity = async (req, res) => {
       eligibilityText,
       fundingType = "PAID",
       stipendAmount,
-      currency = "USD",
+      currency = "$",
       skillIds = [],
       fieldIds = [],
       status = "PUBLISHED",
